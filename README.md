@@ -62,6 +62,15 @@ The `-v` volume keeps your data when the container is restarted.
 |---|---|---|
 | `PORT` | `3000` | HTTP port |
 | `DB_FILE` | `data/finance.db` | Path to the SQLite database file |
+| `SEED_DEMO` | — | Set to `true` to fill an empty database with demo data on start |
+
+### Deploy to Render
+
+The repo includes a [`render.yaml`](render.yaml) Blueprint: in the Render dashboard choose
+**New → Blueprint**, pick this repository and click **Apply**. It builds the Dockerfile on the free plan.
+
+> The free plan has no persistent disk, so the database resets when the service restarts.
+> `SEED_DEMO=true` refills it with demo data, which is fine for a portfolio demo.
 
 ## API
 
