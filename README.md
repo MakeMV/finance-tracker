@@ -5,6 +5,9 @@
 A fullstack app for tracking **income and expenses**: a REST API on **Node.js + Express + SQLite**
 and a responsive frontend in **vanilla JavaScript**.
 
+**🔗 Live demo: https://finance-tracker-umdu.onrender.com**
+<sub>Hosted on Render's free plan: the first load after a period of inactivity can take up to a minute while the server wakes up. Demo data resets on restart.</sub>
+
 ![Screenshot of Finance Tracker](docs/screenshot.jpg)
 
 ## Features
