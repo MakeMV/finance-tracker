@@ -234,23 +234,28 @@ async function deleteTransaction(tx) {
 }
 
 // --- Receipt scanning ---
-// The photo is shrunk in the browser first: a phone photo is 3–8 MB,
-// 1600px JPEG is ~300 KB and still easy to read.
+// Two modes:
+//  - "ai":  the server has an Anthropic API key → Claude reads the photo (best quality).
+//  - "ocr": no key → free Tesseract.js OCR runs right in the browser, and
+//           receipt-parser.js finds the total, date, store and category with rules.
+// The photo is shrunk in the browser first: a phone photo is 3–8 MB.
 
-const MAX_SIDE = 1600;
+const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.esm.min.js';
+let scanMode = 'ocr';
+let ocrWorker = null; // created on first use (downloads ~3 MB once), then reused
 
-async function shrinkImage(file) {
+async function shrinkImage(file, maxSide) {
   try {
     const bitmap = await createImageBitmap(file); // respects EXIF rotation
-    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
     return blob ?? file;
   } catch {
-    return file; // the browser can't decode it (e.g. HEIC): let the server decide
+    return file; // the browser can't decode it (e.g. HEIC): pass it on as is
   }
 }
 
@@ -259,35 +264,67 @@ function setScanStatus(message = '', isError = false) {
   $('scan-status').classList.toggle('form__hint--error', isError);
 }
 
+async function scanWithAI(file) {
+  const image = await shrinkImage(file, 1600);
+  const res = await fetch('/api/receipts/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': image.type || 'image/jpeg' },
+    body: image,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+  return data;
+}
+
+async function scanWithOCR(file) {
+  if (!ocrWorker) {
+    setScanStatus('Loading the free text recognizer (only the first time)…');
+    const [tesseract, parser] = await Promise.all([import(TESSERACT_URL), import('./receipt-parser.js')]);
+    const createWorker = tesseract.createWorker ?? tesseract.default.createWorker;
+    ocrWorker = {
+      parser,
+      worker: await createWorker('rus+eng', 1, {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            setScanStatus(`Reading the receipt… ${Math.round(m.progress * 100)}%`);
+          }
+        },
+      }),
+    };
+  }
+  // Receipts are long and narrow: keep more pixels than for the AI so small print stays readable.
+  const image = await shrinkImage(file, 2400);
+  const { data } = await ocrWorker.worker.recognize(image);
+  return ocrWorker.parser.parseReceiptText(data.text);
+}
+
+function fillFromReceipt(data) {
+  // Fill the form; nothing is saved until the user checks it and presses Add.
+  resetForm();
+  form.elements.type.value = 'expense';
+  renderCategoryOptions('expense', data.category);
+  if (data.amount) form.elements.amount.value = data.amount;
+  if (data.date) form.elements.date.value = data.date;
+  form.elements.description.value = data.description;
+
+  const notes = [scanMode === 'ai'
+    ? 'Filled in from the receipt. Check the fields and press Add.'
+    : 'Filled in by free OCR: it makes mistakes, so check every field before pressing Add.'];
+  if (!data.amount) notes.push('Could not read the total, please enter it.');
+  if (data.currency && data.currency !== 'KZT') notes.push(`Note: the receipt is in ${data.currency}, not tenge.`);
+  setScanStatus(notes.join(' '));
+  form.elements.amount.focus();
+}
+
 async function scanReceipt(file) {
   const btn = $('scan-btn');
   btn.classList.add('btn--busy');
   setScanStatus('Reading the receipt…');
   try {
-    const image = await shrinkImage(file);
-    const res = await fetch('/api/receipts/scan', {
-      method: 'POST',
-      headers: { 'Content-Type': image.type || 'image/jpeg' },
-      body: image,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-
-    // Fill the form; nothing is saved until the user checks it and presses Add.
-    resetForm();
-    form.elements.type.value = 'expense';
-    renderCategoryOptions('expense', data.category);
-    if (data.amount) form.elements.amount.value = data.amount;
-    if (data.date) form.elements.date.value = data.date;
-    form.elements.description.value = data.description;
-
-    const notes = ['Filled in from the receipt. Check the fields and press Add.'];
-    if (!data.amount) notes.push('Could not read the total, please enter it.');
-    if (data.currency && data.currency !== 'KZT') notes.push(`Note: the receipt is in ${data.currency}, not tenge.`);
-    setScanStatus(notes.join(' '));
-    form.elements.amount.focus();
+    fillFromReceipt(scanMode === 'ai' ? await scanWithAI(file) : await scanWithOCR(file));
   } catch (err) {
-    setScanStatus(err.message, true);
+    console.error(err);
+    setScanStatus(scanMode === 'ai' ? err.message : 'Could not read the receipt. Try a sharper, well-lit photo.', true);
   } finally {
     btn.classList.remove('btn--busy');
   }
@@ -296,10 +333,12 @@ async function scanReceipt(file) {
 async function initReceiptScanning() {
   try {
     const { enabled } = await api('/receipts/status');
-    $('scan-btn').hidden = !enabled;
+    scanMode = enabled ? 'ai' : 'ocr';
   } catch {
-    /* scanning just stays hidden */
+    /* server unreachable: the free in-browser mode still works */
   }
+  $('scan-btn').hidden = false;
+  $('scan-btn').title = scanMode === 'ai' ? 'Recognized by Claude AI' : 'Recognized in your browser (free OCR)';
   $('scan-btn').addEventListener('click', () => $('receipt-input').click());
   $('receipt-input').addEventListener('change', (e) => {
     const [file] = e.target.files;

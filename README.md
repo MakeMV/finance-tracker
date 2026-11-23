@@ -16,7 +16,8 @@ and a responsive frontend in **vanilla JavaScript**.
 - 📅 Browse by month: income, expenses and balance for each month
 - 📊 Expenses broken down by category
 - 🔎 Filter the list by type (income / expenses)
-- 📷 **Scan a receipt**: upload a photo and the amount, date, category and store are filled in for you (Claude vision API)
+- 📷 **Scan a receipt**: upload a photo and the amount, date, category and store are filled in for you
+  (Claude vision API, or free in-browser OCR with Tesseract.js when no API key is set)
 - ✅ Server-side validation with clear error messages
 - 🌗 Light & dark theme with a toggle (follows the system until you choose, remembered between visits)
 - 📱 Responsive layout
@@ -28,7 +29,7 @@ and a responsive frontend in **vanilla JavaScript**.
 | Backend | Node.js, Express 5 |
 | Database | SQLite (built-in `node:sqlite`, no native dependencies) |
 | Frontend | HTML, CSS (Grid, custom properties), vanilla JavaScript (ES modules, Fetch API) |
-| AI | Claude API (`@anthropic-ai/sdk`): vision + structured outputs for receipt scanning |
+| Receipt scanning | Claude API (`@anthropic-ai/sdk`): vision + structured outputs; fallback: Tesseract.js OCR in the browser + rule-based parser |
 | Tests | Node.js built-in test runner (`node:test`) |
 | DevOps | Docker, GitHub Actions (tests on Node 24 & 26, Docker build + smoke test) |
 
@@ -69,7 +70,7 @@ The `-v` volume keeps your data when the container is restarted.
 | `PORT` | `3000` | HTTP port |
 | `DB_FILE` | `data/finance.db` | Path to the SQLite database file |
 | `SEED_DEMO` | — | Set to `true` to fill an empty database with demo data on start |
-| `ANTHROPIC_API_KEY` | — | Turns on receipt scanning. Without it the "Scan receipt" button is hidden |
+| `ANTHROPIC_API_KEY` | — | Receipt scanning with Claude. Without it, receipts are read by free OCR in the browser |
 | `RECEIPT_MODEL` | `claude-opus-5-5` | Claude model used to read receipts |
 
 ### Deploy to Render
@@ -112,15 +113,27 @@ Invalid data returns `400` with a list of problems:
 
 ## Receipt scanning
 
+There are two modes; the app picks one automatically (`GET /api/receipts/status`).
+
+**With `ANTHROPIC_API_KEY` — Claude (best quality)**
 1. The browser shrinks the photo to 1600px JPEG (a 5 MB phone photo becomes ~300 KB).
 2. The server sends it to Claude with a **JSON schema** (structured outputs), so the answer is always
    valid JSON with `total`, `date`, `merchant`, `category` (one of the app's categories)…
-3. The server **checks the answer again** (valid date, positive amount, known category) and
-   the form is filled in. Nothing is saved until the user reviews it and presses **Add**.
+3. The server **checks the answer again** (valid date, positive amount, known category).
 
 Guard rails: rate limits (10 scans per IP per hour, 50 per day for the whole server) so a public demo
 can't run up the API bill, a 5 MB upload limit, and the image is never stored.
-The tests use a fake scanner, so they run without an API key or network.
+
+**Without a key — free OCR in the browser**
+1. [Tesseract.js](https://github.com/naptha/tesseract.js) (loaded from a CDN on first use, ~3 MB, then cached)
+   turns the photo into text. The photo never leaves the device.
+2. [`receipt-parser.js`](public/receipt-parser.js) finds the data with rules: the amount on the line with
+   `К ОПЛАТЕ` / `ИТОГО` / `БАРЛЫҒЫ` (skipping change, cash and VAT lines), the first valid date,
+   the store name from the top lines, and the category from keywords (`АЗС` → Transport, `Аптека` → Health…).
+   It tolerates typical OCR noise, like a zero instead of the letter О.
+
+In both modes the form is only **filled in**: nothing is saved until the user checks it and presses **Add**.
+All of this is tested without network or API key (a fake scanner and sample receipt texts).
 
 ## Project structure
 
@@ -137,7 +150,7 @@ finance-tracker/
 │   ├── validation.js    # Input validation, money conversion
 │   ├── categories.js    # Category lists
 │   └── db.js            # SQLite connection and schema
-├── public/              # Frontend (served as static files)
+├── public/              # Frontend (served as static files), incl. receipt-parser.js
 ├── test/               # API and receipt scanning tests
 ├── scripts/seed.js      # Demo data
 └── Dockerfile
