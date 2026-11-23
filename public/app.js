@@ -232,9 +232,43 @@ async function deleteTransaction(tx) {
   }
 }
 
+// --- Theme: light / dark ---
+// Until the user picks one, the theme follows the system setting.
+
+const THEME_KEY = 'finance-tracker:theme';
+const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+function currentTheme() {
+  return document.documentElement.dataset.theme ?? (systemDark.matches ? 'dark' : 'light');
+}
+
+function renderThemeButton() {
+  const isDark = currentTheme() === 'dark';
+  const btn = $('theme-toggle');
+  btn.textContent = isDark ? '☀️' : '🌙';
+  btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+  btn.setAttribute('aria-label', btn.title);
+}
+
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {
+    /* ignore: the choice just won't be remembered */
+  }
+  renderThemeButton();
+}
+
 // --- Start ---
 
 async function init() {
+  renderThemeButton();
+  $('theme-toggle').addEventListener('click', toggleTheme);
+  // If the user hasn't chosen a theme, keep the icon in sync when the system theme changes.
+  systemDark.addEventListener('change', renderThemeButton);
+
   form.addEventListener('submit', handleSubmit);
   $('cancel-edit').addEventListener('click', resetForm);
   for (const radio of form.elements.type) {

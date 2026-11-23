@@ -6,6 +6,13 @@
   <title>Finance Tracker</title>
   <meta name="description" content="Track your income and expenses by month and category.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+  <script>
+    // Apply the saved theme before the page is drawn, so there's no flash of the wrong theme.
+    try {
+      const theme = localStorage.getItem('finance-tracker:theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch {}
+  </script>
   <link rel="stylesheet" href="style.css">
   <script type="module" src="app.js"></script>
 </head>
@@ -13,11 +20,14 @@
   <main class="app">
     <header class="top">
       <h1 class="top__title">💰 Finance Tracker</h1>
-      <nav class="month" aria-label="Month">
-        <button class="icon-btn" type="button" id="prev-month" aria-label="Previous month">‹</button>
-        <span class="month__label" id="month-label" aria-live="polite"></span>
-        <button class="icon-btn" type="button" id="next-month" aria-label="Next month">›</button>
-      </nav>
+      <div class="top__controls">
+        <nav class="month" aria-label="Month">
+          <button class="icon-btn" type="button" id="prev-month" aria-label="Previous month">‹</button>
+          <span class="month__label" id="month-label" aria-live="polite"></span>
+          <button class="icon-btn" type="button" id="next-month" aria-label="Next month">›</button>
+        </nav>
+        <button class="icon-btn" type="button" id="theme-toggle"></button>
+      </div>
     </header>
 
     <p class="status" id="status" role="status" aria-live="polite"></p>

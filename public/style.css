@@ -1,4 +1,7 @@
+/* Theme: light by default. Dark applies when the user picked it (data-theme="dark"),
+   or when the system is dark and the user hasn't forced light. */
 :root {
+  color-scheme: light; /* native controls (date picker, select) follow the theme too */
   --bg: #f4f6fb;
   --panel: #ffffff;
   --text: #0f172a;
@@ -14,7 +17,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0b1120;
     --panel: #131c2e;
     --text: #e2e8f0;
@@ -28,6 +32,23 @@
     --shadow: none;
   }
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1120;
+  --panel: #131c2e;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --border: #23304a;
+  --accent: #818cf8;
+  --accent-hover: #a5b4fc;
+  --income: #34d399;
+  --expense: #f87171;
+  --soft: #1b263b;
+  --shadow: none;
+}
+
+body { transition: background-color 0.2s ease, color 0.2s ease; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -52,6 +73,7 @@ button, input, select { font: inherit; color: inherit; }
 .top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .top__title { margin: 0; font-size: 1.6rem; }
 
+.top__controls { display: flex; align-items: center; gap: 12px; }
 .month { display: flex; align-items: center; gap: 8px; }
 .month__label { min-width: 140px; text-align: center; font-weight: 600; }
 

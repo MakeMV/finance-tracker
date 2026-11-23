@@ -17,7 +17,8 @@ and a responsive frontend in **vanilla JavaScript**.
 - 📊 Expenses broken down by category
 - 🔎 Filter the list by type (income / expenses)
 - ✅ Server-side validation with clear error messages
-- 🌗 Light & dark theme, 📱 responsive layout
+- 🌗 Light & dark theme with a toggle (follows the system until you choose, remembered between visits)
+- 📱 Responsive layout
 
 ## Tech stack
 
