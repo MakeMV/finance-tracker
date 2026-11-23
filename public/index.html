@@ -40,7 +40,12 @@
 
     <div class="layout">
       <section class="panel" aria-labelledby="form-title">
-        <h2 class="panel__title" id="form-title">Add transaction</h2>
+        <div class="panel__head">
+          <h2 class="panel__title" id="form-title">Add transaction</h2>
+          <button class="btn btn--ghost btn--sm" type="button" id="scan-btn" hidden>📷 Scan receipt</button>
+          <input type="file" id="receipt-input" accept="image/*" hidden>
+        </div>
+        <p class="form__hint" id="scan-status" role="status" aria-live="polite"></p>
         <form class="form" id="tx-form" novalidate>
           <div class="type-toggle" role="radiogroup" aria-label="Type">
             <label><input type="radio" name="type" value="expense" checked><span>Expense</span></label>

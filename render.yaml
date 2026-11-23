@@ -12,3 +12,6 @@ services:
       # so the demo fills itself with sample data.
       - key: SEED_DEMO
         value: "true"
+      # Receipt scanning: paste your Anthropic API key in the dashboard (never commit it).
+      - key: ANTHROPIC_API_KEY
+        sync: false

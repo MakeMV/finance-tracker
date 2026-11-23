@@ -178,6 +178,7 @@ function resetForm() {
   $('submit-btn').textContent = 'Add';
   $('cancel-edit').hidden = true;
   $('form-error').textContent = '';
+  setScanStatus('');
 }
 
 function startEdit(tx) {
@@ -230,6 +231,81 @@ async function deleteTransaction(tx) {
   } catch (err) {
     setStatus(err.message, true);
   }
+}
+
+// --- Receipt scanning ---
+// The photo is shrunk in the browser first: a phone photo is 3–8 MB,
+// 1600px JPEG is ~300 KB and still easy to read.
+
+const MAX_SIDE = 1600;
+
+async function shrinkImage(file) {
+  try {
+    const bitmap = await createImageBitmap(file); // respects EXIF rotation
+    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    return blob ?? file;
+  } catch {
+    return file; // the browser can't decode it (e.g. HEIC): let the server decide
+  }
+}
+
+function setScanStatus(message = '', isError = false) {
+  $('scan-status').textContent = message;
+  $('scan-status').classList.toggle('form__hint--error', isError);
+}
+
+async function scanReceipt(file) {
+  const btn = $('scan-btn');
+  btn.classList.add('btn--busy');
+  setScanStatus('Reading the receipt…');
+  try {
+    const image = await shrinkImage(file);
+    const res = await fetch('/api/receipts/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': image.type || 'image/jpeg' },
+      body: image,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+
+    // Fill the form; nothing is saved until the user checks it and presses Add.
+    resetForm();
+    form.elements.type.value = 'expense';
+    renderCategoryOptions('expense', data.category);
+    if (data.amount) form.elements.amount.value = data.amount;
+    if (data.date) form.elements.date.value = data.date;
+    form.elements.description.value = data.description;
+
+    const notes = ['Filled in from the receipt. Check the fields and press Add.'];
+    if (!data.amount) notes.push('Could not read the total, please enter it.');
+    if (data.currency && data.currency !== 'KZT') notes.push(`Note: the receipt is in ${data.currency}, not tenge.`);
+    setScanStatus(notes.join(' '));
+    form.elements.amount.focus();
+  } catch (err) {
+    setScanStatus(err.message, true);
+  } finally {
+    btn.classList.remove('btn--busy');
+  }
+}
+
+async function initReceiptScanning() {
+  try {
+    const { enabled } = await api('/receipts/status');
+    $('scan-btn').hidden = !enabled;
+  } catch {
+    /* scanning just stays hidden */
+  }
+  $('scan-btn').addEventListener('click', () => $('receipt-input').click());
+  $('receipt-input').addEventListener('change', (e) => {
+    const [file] = e.target.files;
+    e.target.value = ''; // allow choosing the same photo again
+    if (file) scanReceipt(file);
+  });
 }
 
 // --- Theme: light / dark ---
@@ -286,6 +362,7 @@ async function init() {
   }
   resetForm();
   load();
+  initReceiptScanning();
 }
 
 init();

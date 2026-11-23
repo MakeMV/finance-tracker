@@ -16,6 +16,7 @@ and a responsive frontend in **vanilla JavaScript**.
 - 📅 Browse by month: income, expenses and balance for each month
 - 📊 Expenses broken down by category
 - 🔎 Filter the list by type (income / expenses)
+- 📷 **Scan a receipt**: upload a photo and the amount, date, category and store are filled in for you (Claude vision API)
 - ✅ Server-side validation with clear error messages
 - 🌗 Light & dark theme with a toggle (follows the system until you choose, remembered between visits)
 - 📱 Responsive layout
@@ -27,6 +28,7 @@ and a responsive frontend in **vanilla JavaScript**.
 | Backend | Node.js, Express 5 |
 | Database | SQLite (built-in `node:sqlite`, no native dependencies) |
 | Frontend | HTML, CSS (Grid, custom properties), vanilla JavaScript (ES modules, Fetch API) |
+| AI | Claude API (`@anthropic-ai/sdk`): vision + structured outputs for receipt scanning |
 | Tests | Node.js built-in test runner (`node:test`) |
 | DevOps | Docker, GitHub Actions (tests on Node 24 & 26, Docker build + smoke test) |
 
@@ -67,6 +69,8 @@ The `-v` volume keeps your data when the container is restarted.
 | `PORT` | `3000` | HTTP port |
 | `DB_FILE` | `data/finance.db` | Path to the SQLite database file |
 | `SEED_DEMO` | — | Set to `true` to fill an empty database with demo data on start |
+| `ANTHROPIC_API_KEY` | — | Turns on receipt scanning. Without it the "Scan receipt" button is hidden |
+| `RECEIPT_MODEL` | `claude-opus-5-5` | Claude model used to read receipts |
 
 ### Deploy to Render
 
@@ -89,6 +93,8 @@ All endpoints are under `/api` and use JSON.
 | `PUT` | `/api/transactions/:id` | Update a transaction |
 | `DELETE` | `/api/transactions/:id` | Delete a transaction → `204` |
 | `GET` | `/api/summary?month=2026-11` | Income, expenses, balance and expenses by category |
+| `GET` | `/api/receipts/status` | Whether receipt scanning is enabled |
+| `POST` | `/api/receipts/scan` | Body: the image (`Content-Type: image/jpeg`, png, webp or gif, up to 5 MB). Returns the recognized fields; saves nothing |
 
 Example:
 
@@ -104,6 +110,18 @@ Invalid data returns `400` with a list of problems:
 { "errors": ["amount must be a positive number", "date must be a valid date in YYYY-MM-DD format"] }
 ```
 
+## Receipt scanning
+
+1. The browser shrinks the photo to 1600px JPEG (a 5 MB phone photo becomes ~300 KB).
+2. The server sends it to Claude with a **JSON schema** (structured outputs), so the answer is always
+   valid JSON with `total`, `date`, `merchant`, `category` (one of the app's categories)…
+3. The server **checks the answer again** (valid date, positive amount, known category) and
+   the form is filled in. Nothing is saved until the user reviews it and presses **Add**.
+
+Guard rails: rate limits (10 scans per IP per hour, 50 per day for the whole server) so a public demo
+can't run up the API bill, a 5 MB upload limit, and the image is never stored.
+The tests use a fake scanner, so they run without an API key or network.
+
 ## Project structure
 
 ```
@@ -112,12 +130,15 @@ finance-tracker/
 │   ├── server.js        # Entry point: opens the DB, starts HTTP server, graceful shutdown
 │   ├── app.js           # Express app: middleware, routes, error handling
 │   ├── routes/api.js    # REST endpoints
+│   ├── routes/receipts.js # Receipt upload endpoint
+│   ├── receipts.js      # Receipt scanning with the Claude API
+│   ├── rate-limit.js    # In-memory rate limiter
 │   ├── repository.js    # All SQL queries (parameterized)
 │   ├── validation.js    # Input validation, money conversion
 │   ├── categories.js    # Category lists
 │   └── db.js            # SQLite connection and schema
 ├── public/              # Frontend (served as static files)
-├── test/api.test.js     # API tests
+├── test/               # API and receipt scanning tests
 ├── scripts/seed.js      # Demo data
 └── Dockerfile
 ```

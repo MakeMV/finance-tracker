@@ -4,6 +4,7 @@ import { openDb } from './db.js';
 import { createApp } from './app.js';
 import { createRepository } from './repository.js';
 import { seedDemo } from './seed.js';
+import { createReceiptScanner } from './receipts.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const DB_FILE = process.env.DB_FILE || 'data/finance.db';
@@ -17,7 +18,11 @@ if (process.env.SEED_DEMO === 'true') {
   if (count) console.log(`Demo mode: added ${count} sample transactions.`);
 }
 
-const app = createApp(db);
+// Receipt scanning needs an Anthropic API key; without one the feature stays hidden.
+const receiptScanner = process.env.ANTHROPIC_API_KEY ? createReceiptScanner() : null;
+if (!receiptScanner) console.log('ANTHROPIC_API_KEY is not set: receipt scanning is off.');
+
+const app = createApp(db, { receiptScanner });
 
 const server = app.listen(PORT, () => {
   console.log(`Finance Tracker running at http://localhost:${PORT}`);

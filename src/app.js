@@ -2,18 +2,23 @@ import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { createRepository } from './repository.js';
 import { apiRouter } from './routes/api.js';
+import { receiptsRouter } from './routes/receipts.js';
 
 const publicDir = fileURLToPath(new URL('../public', import.meta.url));
 
 /**
- * Build the Express app. The database is passed in (dependency injection),
- * so tests can use a fresh in-memory database.
+ * Build the Express app. The database and the receipt scanner are passed in
+ * (dependency injection), so tests can use an in-memory database and a fake scanner.
+ * Without a scanner, receipt scanning is simply turned off.
  */
-export function createApp(db) {
+export function createApp(db, { receiptScanner = null, receiptLimiter } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // Behind Render's proxy: take the client IP from X-Forwarded-For (used by the rate limiter).
+  app.set('trust proxy', 1);
 
   app.use(express.json({ limit: '10kb' }));
+  app.use('/api/receipts', receiptsRouter(receiptScanner, receiptLimiter));
   app.use('/api', apiRouter(createRepository(db)));
   app.use(express.static(publicDir));
 

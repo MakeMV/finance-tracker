@@ -150,6 +150,9 @@ button, input, select { font: inherit; color: inherit; }
 
 .form__error { margin: 0; color: var(--expense); font-size: 0.9rem; }
 .form__error:empty { display: none; }
+.form__hint { margin: -4px 0 12px; font-size: 0.9rem; color: var(--muted); }
+.form__hint:empty { display: none; }
+.form__hint--error { color: var(--expense); }
 .form__actions { display: flex; gap: 8px; }
 
 .btn {
@@ -163,6 +166,9 @@ button, input, select { font: inherit; color: inherit; }
 }
 .btn:hover { background: var(--accent-hover); }
 .btn--ghost { color: var(--text); background: var(--soft); }
+.btn--sm { padding: 6px 12px; font-size: 0.9rem; }
+.btn--busy { opacity: 0.6; pointer-events: none; }
+[hidden] { display: none !important; }
 .btn--ghost:hover { background: var(--border); }
 
 /* Category bars */
